@@ -8,15 +8,19 @@ using EPiServer.Web.Mvc;
 using EPiServer.Web.Mvc.Html;
 using EPiServer.Web.Routing;
 using Foundation.Cms.Extensions;
+using Foundation.Cms.Settings;
 using Foundation.Commerce;
-using Foundation.Commerce.Catalog;
 using Foundation.Commerce.Customer;
 using Foundation.Commerce.Customer.Services;
 using Foundation.Commerce.Extensions;
-using Foundation.Commerce.Models.Pages;
-using Foundation.Commerce.Order.Services;
-using Foundation.Commerce.Order.ViewModels;
-using Foundation.Commerce.Personalization;
+using Foundation.Features.CatalogContent.Services;
+using Foundation.Features.Checkout.Services;
+using Foundation.Features.Checkout.ViewModels;
+using Foundation.Features.Header;
+using Foundation.Features.MyAccount.OrderConfirmation;
+using Foundation.Features.Settings;
+using Foundation.Infrastructure;
+using Foundation.Personalization;
 using Mediachase.Commerce.Catalog;
 using Mediachase.Commerce.Orders;
 using Mediachase.Commerce.Security;
@@ -51,6 +55,7 @@ namespace Foundation.Features.NamedCarts.DefaultCart
         private readonly CartItemViewModelFactory _cartItemViewModelFactory;
         private readonly IProductService _productService;
         private readonly LanguageResolver _languageResolver;
+        private readonly ISettingsService _settingsService;
 
         private const string b2cMinicart = "~/Features/Shared/Foundation/Header/_HeaderCart.cshtml";
 
@@ -69,7 +74,8 @@ namespace Foundation.Features.NamedCarts.DefaultCart
             IOrderGroupCalculator orderGroupCalculator,
             CartItemViewModelFactory cartItemViewModelFactory,
             IProductService productService,
-            LanguageResolver languageResolver)
+            LanguageResolver languageResolver,
+            ISettingsService settingsService)
 
         {
             _cartService = cartService;
@@ -87,6 +93,7 @@ namespace Foundation.Features.NamedCarts.DefaultCart
             _cartItemViewModelFactory = cartItemViewModelFactory;
             _productService = productService;
             _languageResolver = languageResolver;
+            _settingsService = settingsService;
         }
 
         private CartWithValidationIssues CartWithValidationIssues => _cart ?? (_cart = _cartService.LoadCart(_cartService.DefaultCartName, true));
@@ -122,6 +129,19 @@ namespace Foundation.Features.NamedCarts.DefaultCart
         public async Task<ActionResult> Index(CartPage currentPage)
         {
             var messages = string.Empty;
+            if (TempData[Constant.Quote.RequestQuoteStatus] != null)
+            {
+                var requestQuote = (bool)TempData[Constant.Quote.RequestQuoteStatus];
+                if (requestQuote)
+                {
+                    ViewBag.QuoteMessage = "Request quote successfully";
+                }
+                else
+                {
+                    ViewBag.ErrorMessage = "Request quote unsuccessfully";
+                }
+            }
+
             if (CartWithValidationIssues.Cart != null && CartWithValidationIssues.ValidationIssues.Any())
             {
                 foreach (var item in CartWithValidationIssues.Cart.GetAllLineItems())
@@ -178,7 +198,7 @@ namespace Foundation.Features.NamedCarts.DefaultCart
                     {
                         return Json(new ChangeCartJsonResult
                         {
-                            StatusCode = 1,
+                            StatusCode = result.EntriesAddedToCart ? 1 : 0,
                             CountItems = (int)CartWithValidationIssues.Cart.GetAllLineItems().Sum(x => x.Quantity),
                             Message = product + " is added to the cart successfully.\n" + result.GetComposedValidationMessage(),
                             SubTotal = CartWithValidationIssues.Cart.GetSubTotal()
@@ -187,7 +207,7 @@ namespace Foundation.Features.NamedCarts.DefaultCart
 
                     return Json(new ChangeCartJsonResult
                     {
-                        StatusCode = 1,
+                        StatusCode = result.EntriesAddedToCart ? 1 : 0,
                         CountItems = (int)CartWithValidationIssues.Cart.GetAllLineItems().Sum(x => x.Quantity),
                         Message = product + " is added to the cart successfully.",
                         SubTotal = CartWithValidationIssues.Cart.GetSubTotal()
@@ -271,10 +291,10 @@ namespace Foundation.Features.NamedCarts.DefaultCart
 
         public JsonResult RedirectToCart(string message)
         {
-            var homePage = _contentLoader.Get<PageData>(ContentReference.StartPage) as CommerceHomePage;
-            if (homePage?.CartPage != null)
+            var referencePages = _settingsService.GetSiteSettings<ReferencePageSettings>();
+            if (referencePages?.CartPage.IsNullOrEmpty() ?? false)
             {
-                var cartPage = _contentLoader.Get<CartPage>(homePage.CartPage);
+                var cartPage = _contentLoader.Get<CartPage>(referencePages.CartPage);
                 return Json(new { Redirect = cartPage.StaticLinkURL, Message = message });
             }
 
@@ -380,10 +400,10 @@ namespace Foundation.Features.NamedCarts.DefaultCart
             //await _checkoutService.CreateBoughtProductsSegments(CartWithValidationIssues.Cart);
             await _recommendationService.TrackOrder(HttpContext, order);
 
-            var homePage = _contentLoader.Get<PageData>(ContentReference.StartPage) as CommerceHomePage;
-            if (homePage?.OrderConfirmationPage != null)
+            var referencePages = _settingsService.GetSiteSettings<ReferencePageSettings>();
+            if (referencePages?.OrderConfirmationPage.IsNullOrEmpty() ?? false)
             {
-                var orderConfirmationPage = _contentLoader.Get<OrderConfirmationPage>(homePage.OrderConfirmationPage);
+                var orderConfirmationPage = _contentLoader.Get<OrderConfirmationPage>(referencePages.OrderConfirmationPage);
                 var queryCollection = new NameValueCollection
                 {
                     {"contactId", contact.PrimaryKeyId?.ToString()},
@@ -513,14 +533,12 @@ namespace Foundation.Features.NamedCarts.DefaultCart
 
             var viewModel = _cartViewModelFactory.CreateLargeCartViewModel(CartWithValidationIssues.Cart, currentPage); ;
             return View("LargeCart", viewModel);
-
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<ActionResult> Reorder(string orderId)
         {
-
             if (!int.TryParse(orderId, out var orderIntId))
             {
                 return new HttpStatusCodeResult(500, "Error reordering order");
@@ -557,7 +575,7 @@ namespace Foundation.Features.NamedCarts.DefaultCart
             }
 
             _orderRepository.Save(CartWithValidationIssues.Cart);
-            return Redirect(Url.ContentUrl(_contentLoader.Get<CommerceHomePage>(ContentReference.StartPage).CheckoutPage));
+            return Redirect(Url.ContentUrl(_settingsService.GetSiteSettings<ReferencePageSettings>()?.CheckoutPage ?? ContentReference.StartPage));
         }
 
         [HttpPost]
@@ -776,6 +794,12 @@ namespace Foundation.Features.NamedCarts.DefaultCart
                     Cart = _cartService.CreateNewCart(),
                     ValidationIssues = new Dictionary<ILineItem, List<ValidationIssue>>()
                 };
+
+                TempData[Constant.Quote.RequestQuoteStatus] = true;
+            }
+            else
+            {
+                TempData[Constant.Quote.RequestQuoteStatus] = false;
             }
 
             return Redirect(currentPage.StaticLinkURL);
@@ -792,10 +816,9 @@ namespace Foundation.Features.NamedCarts.DefaultCart
 
             var placedOrderId = _cartService.PlaceCartForQuoteById(orderId, currentCustomer.ContactId);
 
-            var startPage = _contentLoader.Get<CommerceHomePage>(ContentReference.StartPage);
-
-            return RedirectToAction("Index", "OrderDetails",
-                new { currentPage = startPage.OrderDetailsPage, orderGroupId = placedOrderId });
+            var referencePages = _settingsService.GetSiteSettings<ReferencePageSettings>();
+            var orderDetailUrl = Url.ContentUrl(referencePages.OrderDetailsPage);
+            return Redirect(orderDetailUrl + "?orderGroupId=" + placedOrderId);
         }
 
         [HttpPost]
@@ -849,7 +872,7 @@ namespace Foundation.Features.NamedCarts.DefaultCart
                     returnedMessages.Add(responseMessage);
                 }
             }
-            Session[Constant.ErrorMesages] = returnedMessages;
+            Session[Constant.ErrorMessages] = returnedMessages;
 
             return Json(returnedMessages, JsonRequestBehavior.AllowGet);
         }

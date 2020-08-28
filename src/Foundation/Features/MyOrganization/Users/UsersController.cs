@@ -1,25 +1,28 @@
 ﻿using EPiServer;
 using EPiServer.Cms.UI.AspNetIdentity;
-using EPiServer.Core;
 using EPiServer.Framework.Localization;
 using EPiServer.Globalization;
 using EPiServer.Web.Mvc;
 using Foundation.Cms;
 using Foundation.Cms.Attributes;
+using Foundation.Cms.Extensions;
 using Foundation.Cms.Identity;
-using Foundation.Cms.Pages;
+using Foundation.Cms.Settings;
 using Foundation.Commerce;
 using Foundation.Commerce.Customer;
 using Foundation.Commerce.Customer.Services;
-using Foundation.Commerce.Customer.ViewModels;
-using Foundation.Commerce.Mail;
-using Foundation.Commerce.Models.Pages;
-using Foundation.Find.Commerce;
+using Foundation.Features.MyAccount.ResetPassword;
+using Foundation.Features.MyOrganization.Organization;
+using Foundation.Features.MyOrganization.SubOrganization;
+using Foundation.Features.Search;
+using Foundation.Features.Settings;
+using Foundation.Features.Shared;
 using Microsoft.AspNet.Identity;
 using Microsoft.AspNet.Identity.Owin;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Web;
 using System.Web.Mvc;
 
@@ -35,8 +38,9 @@ namespace Foundation.Features.MyOrganization.Users
         private readonly ApplicationUserManager<SiteUser> _userManager;
         private readonly ApplicationSignInManager<SiteUser> _signInManager;
         private readonly LocalizationService _localizationService;
-        private readonly ICommerceSearchService _searchService;
+        private readonly ISearchService _searchService;
         private readonly CookieService _cookieService;
+        private readonly ISettingsService _settingsService;
 
         public UsersController(
             ICustomerService customerService,
@@ -46,8 +50,9 @@ namespace Foundation.Features.MyOrganization.Users
             IContentLoader contentLoader,
             IMailService mailService,
             LocalizationService localizationService,
-            ICommerceSearchService searchService,
-            CookieService cookieService)
+            ISearchService searchService,
+            CookieService cookieService,
+            ISettingsService settingsService)
         {
             _customerService = customerService;
             _organizationService = organizationService;
@@ -58,14 +63,20 @@ namespace Foundation.Features.MyOrganization.Users
             _localizationService = localizationService;
             _searchService = searchService;
             _cookieService = cookieService;
+            _settingsService = settingsService;
         }
 
         [NavigationAuthorize("Admin")]
         public ActionResult Index(UsersPage currentPage)
         {
+            if (TempData["ImpersonateFail"] != null)
+            {
+                ViewBag.Impersonate = (bool)TempData["ImpersonateFail"];
+            }
+
             var organization = _organizationService.GetCurrentFoundationOrganization();
             var currentOrganization = organization;
-            var currentOrganizationContext = _cookieService.Get(Constant.Fields.SelectedSuborganization);
+            var currentOrganizationContext = _cookieService.Get(Constant.Fields.SelectedOrganization);
             if (currentOrganizationContext != null)
             {
                 currentOrganization = _organizationService.GetFoundationOrganizationById(currentOrganizationContext);
@@ -153,7 +164,7 @@ namespace Foundation.Features.MyOrganization.Users
         [HttpPost]
         [AllowDBWrite]
         [NavigationAuthorize("Admin")]
-        public ActionResult AddUser(UsersPageViewModel viewModel)
+        public async Task<ActionResult> AddUser(UsersPageViewModel viewModel)
         {
             var user = _userManager.FindByEmail(viewModel.Contact.Email);
             if (user != null)
@@ -168,7 +179,7 @@ namespace Foundation.Features.MyOrganization.Users
                 }
 
                 var organizationId = organization.OrganizationId.ToString();
-                var currentOrganizationContext = _cookieService.Get(Constant.Fields.SelectedSuborganization);
+                var currentOrganizationContext = _cookieService.Get(Constant.Fields.SelectedOrganization);
                 if (currentOrganizationContext != null)
                 {
                     organizationId = currentOrganizationContext;
@@ -179,7 +190,7 @@ namespace Foundation.Features.MyOrganization.Users
             }
             else
             {
-                SaveUser(viewModel);
+                await SaveUser(viewModel);
             }
 
             return RedirectToAction("Index");
@@ -201,17 +212,26 @@ namespace Foundation.Features.MyOrganization.Users
         }
 
         [NavigationAuthorize("Admin")]
-        public JsonResult ImpersonateUser(string id)
+        public ActionResult ImpersonateUser(string email)
         {
             var success = false;
-            var user = _userManager.FindById(id);
+            var user = _userManager.FindByEmail(email);
             if (user != null)
             {
                 _cookieService.Set(Constant.Cookies.B2BImpersonatingAdmin, User.Identity.GetUserName(), true);
                 _signInManager.SignIn(user, false, false);
                 success = true;
             }
-            return Json(new { success });
+
+            if (success)
+            {
+                return Redirect("/");
+            }
+            else
+            {
+                TempData["ImpersonateFail"] = false;
+                return RedirectToAction("Index");
+            }
         }
 
         public ActionResult BackAsAdmin()
@@ -221,14 +241,16 @@ namespace Foundation.Features.MyOrganization.Users
             {
                 var adminUser = _userManager.FindByEmail(adminUsername);
                 if (adminUser != null)
+                {
                     _signInManager.SignIn(adminUser, false, false);
+                }
 
                 _cookieService.Remove(Constant.Cookies.B2BImpersonatingAdmin);
             }
             return Redirect(Request.UrlReferrer?.AbsoluteUri ?? "/");
         }
 
-        private void SaveUser(UsersPageViewModel viewModel)
+        private async Task SaveUser(UsersPageViewModel viewModel)
         {
             var contactUser = new SiteUser
             {
@@ -247,9 +269,13 @@ namespace Foundation.Features.MyOrganization.Users
             var user = _userManager.FindByName(viewModel.Contact.Email);
             if (user != null)
             {
-                var startPage = _contentLoader.Get<CommerceHomePage>(ContentReference.StartPage);
-                var body = _mailService.GetHtmlBodyForMail(startPage.ResetPasswordMail, new NameValueCollection(), ContentLanguage.PreferredCulture.TwoLetterISOLanguageName);
-                var mailPage = _contentLoader.Get<MailBasePage>(startPage.ResetPasswordMail);
+                var referencePages = _settingsService.GetSiteSettings<ReferencePageSettings>();
+                if (referencePages?.ResetPasswordMail.IsNullOrEmpty() ?? true)
+                {
+                    return;
+                }
+                var body = await _mailService.GetHtmlBodyForMail(referencePages.ResetPasswordMail, new NameValueCollection(), ContentLanguage.PreferredCulture.TwoLetterISOLanguageName);
+                var mailPage = _contentLoader.Get<MailBasePage>(referencePages.ResetPasswordMail);
                 var code = _userManager.GeneratePasswordResetToken(user.Id);
                 var url = Url.Action("ResetPassword", "ResetPassword", new { userId = user.Id, code = HttpUtility.UrlEncode(code), language = ContentLanguage.PreferredCulture.TwoLetterISOLanguageName }, Request.Url.Scheme);
 
@@ -262,6 +288,5 @@ namespace Foundation.Features.MyOrganization.Users
                 _mailService.Send(mailPage.Subject, body, user.Email);
             }
         }
-
     }
 }

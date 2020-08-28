@@ -1,8 +1,20 @@
-﻿@model CheckoutViewModel
+﻿@using Foundation.Features.Checkout.ViewModels
+
+@model CheckoutViewModel
+@{ 
+    var errorMessages = ViewBag.ErrorMessages != null ? (string)ViewBag.ErrorMessages : string.Empty;
+}
 
 <div class="col-12">
     <h3 class="checkout-title">SECURE CHECKOUT</h3>
 </div>
+
+@if (!string.IsNullOrEmpty(errorMessages))
+{
+    <div class="col-12 error">
+        <p>@errorMessages</p>
+    </div>
+}
 
 @using (Html.BeginForm("PlaceOrder", "Checkout", FormMethod.Post, new { @class = "row jsCheckoutForm", id = "jsCheckoutForm", novalidate = "novalidate" }))
 {
@@ -74,13 +86,11 @@
                     </div>
                     <br />
                 }
-
                 <div class="row">
                     <div class="col-12">
                         <a href="#" class="button-white full-width jsSelectShipment" data-shipmentid="0">New Shipment</a>
                     </div>
                 </div>
-
             </div>
             <div class="modal-footer">
                 <button type="button" class="button-black full-width" data-dismiss="modal">Close</button>
@@ -88,7 +98,6 @@
         </div>
     </div>
 </div>
-
 
 <div class="modal fade" id="newAddressModal" tabindex="-1" role="dialog">
     <div class="modal-dialog" role="document">
@@ -172,6 +181,8 @@
                         <li>
                             <div class="row">
                                 <div class="form-group col-xs-12 col-md-6 jsCountryRegionContainer">
+                                    <label>Country/Region</label>
+                                    <input type="hidden" class="jsRegionName" value="CountryRegion.Region")" />
                                     @{
                                         var regionValues = new List<KeyValuePair<string, string>>();
                                         foreach (var a in Model.BillingAddress.CountryRegion.RegionOptions)
@@ -179,9 +190,10 @@
                                             regionValues.Add(new KeyValuePair<string, string>(a, a));
                                         }
                                     }
-                                    @Helpers.RenderDropdown(regionValues, "", "", "CountryRegion.Region")
+                                    @Helpers.RenderDropdown(regionValues, "", "jsRegionSelectionContainer", "CountryRegion.Region")
                                 </div>
-                                <div class="form-group col-xs-12 col-md-6">
+                                <div class="form-group col-xs-12 col-md-6 jsCountrySelectionContainer">
+                                    <label>Country</label>
                                     @{
                                         var countryValues = new List<KeyValuePair<string, string>>();
                                         foreach (var a in Model.BillingAddress.CountryOptions)

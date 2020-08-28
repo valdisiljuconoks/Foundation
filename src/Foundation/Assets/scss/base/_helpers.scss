@@ -1,13 +1,15 @@
-/**
- * Clear inner floats
- */
+/* Clear inner floats */
 .clearfix::after {
     clear: both;
     content: "";
     display: table;
 }
 
-/* Override bootstrap container for 1200px and up) */
+body {
+    overflow-x: hidden;
+}
+
+/* Override bootstrap container for 1200px and up */
 .container {
     @include media-breakpoint-up(xl) {
         max-width: 1440px;
@@ -22,25 +24,8 @@ div.block {
     padding-right: 0;
 }
 
-/* Clear bootstrap margin-bottom for p tab */
-p {
-    margin-bottom: 0;
-}
-
 hr {
     color: #C4C4C4;
-}
-
-ul {
-    margin: 0;
-}
-
-a {
-    color: black;
-
-    &:hover {
-        color: black;
-    }
 }
 
 .filters-tag {
@@ -70,7 +55,7 @@ a {
     border-radius: 3px;
     background-color: $color-darkgrey;
     color: black;
-    font-size: 14px;
+    font-size: $text-font-size;
     padding: 5px 10px 5px 10px;
     margin-bottom: 0;
 }
@@ -165,34 +150,80 @@ ul.none-style-type {
     list-style-type: none;
 }
 
-.search-box {
-    border: 1px solid #ddd;
-    margin-bottom: 12px;
+.screen-width-block {
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+
+    .screen-width-wrapper {
+        @include media-breakpoint-up(xl) {
+            max-width: $container-max-width;
+        }
+
+        width: 100%;
+        margin-right: auto;
+        margin-left: auto;
+    }
+
+    .screen-width-container {
+        @include media-breakpoint-up(xl) {
+            max-width: $container-max-width;
+        }
+
+        width: 100%;
+        padding-right: 15px;
+        padding-left: 15px;
+    }
+}
+
+.sticky-top {
+    position: sticky;
+    top: 0;
+}
+
+.disabled {
+    pointer-events: none;
+    cursor: default;
+    background-color: lightgray;
+    border: 0;
+}
+
+.address-block {
+    margin-top: 15px;
+    border-top: 1px solid #eeeeee;
+    padding-top: 20px;
+}
+
+a.account-link {
+    text-decoration: underline;
+    color: #555;
+
+    &:hover {
+        opacity: 0.7;
+    }
+}
+
+.image-full-width {
+    width: 100%;
+    height: auto;
+}
+
+.input-block {
+    padding-top: 15px;
     display: flex;
+    align-items: flex-end;
+    flex-basis: 50%;
     justify-content: space-between;
-    align-items: center;
+}
 
-    & > input[type=text] {
-        font-size: 16px;
-        padding: 12px 20px;
-        border: 0;
-        flex-grow: 1;
+.form-square {
+    border-radius: 0;
+}
 
-        &:focus {
-            border: 0;
-            outline: 0;
-        }
-    }
-
-    & > a {
-        height: 100%;
-        padding: 15px 30px;
-        flex-grow: 0;
-        border-left: 1px solid #ddd;
-
-        &:hover {
-            background-color: lightgrey;
-            color: white;
-        }
-    }
+.tier-icon {
+    width: 25px;
+    height: 25px;
 }

@@ -1,10 +1,11 @@
 ﻿@using EPiServer.Web.Mvc.Html
-@using Foundation.Commerce.ViewModels.Header
-@model Foundation.Commerce.ViewModels.SubOrganizationPageViewModel
+@using Foundation.Features.MyOrganization.SubOrganization
+
+@model SubOrganizationPageViewModel
+
 @{
     Layout = "~/Features/MyOrganization/_MyOrganizationLayout.cshtml";
 }
-
 
 @Html.PropertyFor(model => model.CurrentContent.MainBody)
 <div class="row">
@@ -88,7 +89,6 @@
                         @Html.DropDownListFor(x => x.SubOrganizationModel.Locations[i].CountryCode,
                                 new SelectList(Model.SubOrganizationModel.CountryOptions, "Code", "Name"),
                                 new { @class = "select-menu" })
-                        @Html.ValidationMessageFor(x => x.SubOrganizationModel.Locations[i].CountryCode)
                         @Html.ValidationMessageFor(x => x.SubOrganizationModel.Locations[i].CountryCode)
                     </div>
                     <div class="col-1">
