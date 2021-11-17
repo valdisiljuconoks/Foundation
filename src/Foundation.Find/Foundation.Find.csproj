@@ -26,7 +26,7 @@
     <PackageReference Include="Geta.EpiCategories" Version="1.2.11" />
     <PackageReference Include="Geta.EpiCategories.Find" Version="1.2.11" />
     <PackageReference Include="Microsoft.Net.Http" Version="2.2.29" />
-    <PackageReference Include="Microsoft.Owin.Security" Version="4.1.0" />
+    <PackageReference Include="Microsoft.Owin.Security" Version="4.1.1" />
     <PackageReference Include="Microsoft.Owin.Security.Cookies" Version="4.1.0" />
     <PackageReference Include="Microsoft.Owin.Security.OAuth" Version="4.1.0" />
     <PackageReference Include="PowerSlice" Version="4.0.1" />
