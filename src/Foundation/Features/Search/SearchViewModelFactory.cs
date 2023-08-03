@@ -1,6 +1,8 @@
 using EPiServer;
 using EPiServer.Commerce.Catalog.ContentTypes;
 using EPiServer.Core;
+using EPiServer.Find;
+using EPiServer.Find.Cms;
 using EPiServer.Find.Commerce;
 using EPiServer.Find.Framework.BestBets;
 using EPiServer.Framework.Localization;
@@ -18,10 +20,8 @@ namespace Foundation.Features.Search
 {
     public interface ISearchViewModelFactory
     {
-        SearchViewModel<TContent> Create<TContent>(TContent currentContent,
-            string selectedFacets,
-            int catlogId,
-            FilterOptionViewModel filterOption)
+        SearchViewModel<TContent> Create<TContent>(TContent currentContent, string selectedFacets,
+            int catlogId, FilterOptionViewModel filterOption)
             where TContent : IContent;
     }
 
@@ -33,12 +33,14 @@ namespace Foundation.Features.Search
         private readonly ReferenceConverter _referenceConverter;
         private readonly UrlResolver _urlResolver;
         private readonly HttpContextBase _httpContextBase;
+        private readonly IClient _findClient;
 
         public SearchViewModelFactory(LocalizationService localizationService, ISearchService searchService,
             IContentLoader contentLoader,
             ReferenceConverter referenceConverter,
             UrlResolver urlResolver,
-            HttpContextBase httpContextBase)
+            HttpContextBase httpContextBase,
+            IClient findClient)
         {
             _searchService = searchService;
             _contentLoader = contentLoader;
@@ -46,6 +48,7 @@ namespace Foundation.Features.Search
             _urlResolver = urlResolver;
             _httpContextBase = httpContextBase;
             _localizationService = localizationService;
+            _findClient = findClient;
         }
 
         public virtual SearchViewModel<TContent> Create<TContent>(TContent currentContent,
@@ -66,25 +69,24 @@ namespace Foundation.Features.Search
                 return model;
             }
 
-            var commerceFilterOption = filterOption;
-            var results = _searchService.Search(currentContent, commerceFilterOption, selectedFacets, catalogId);
+            var results = _searchService.Search(currentContent, filterOption, selectedFacets, catalogId);
 
-            commerceFilterOption.TotalCount = results.TotalCount;
-            commerceFilterOption.FacetGroups = results.FacetGroups.ToList();
+            filterOption.TotalCount = results.TotalCount;
+            filterOption.FacetGroups = results.FacetGroups.ToList();
 
-            commerceFilterOption.Sorting = _searchService.GetSortOrder().Select(x => new SelectListItem
+            filterOption.Sorting = _searchService.GetSortOrder().Select(x => new SelectListItem
             {
                 Text = _localizationService.GetString("/Category/Sort/" + x.Name),
                 Value = x.Name.ToString(),
-                Selected = string.Equals(x.Name.ToString(), commerceFilterOption.Sort)
+                Selected = string.Equals(x.Name.ToString(), filterOption.Sort)
             });
 
             model.CurrentContent = currentContent;
             model.ProductViewModels = results?.ProductViewModels ?? new List<ProductTileViewModel>();
-            model.FilterOption = commerceFilterOption;
-            model.CategoriesFilter = GetCategoriesFilter(currentContent, commerceFilterOption.Q);
+            model.FilterOption = filterOption;
+            model.CategoriesFilter = GetCategoriesFilter(currentContent, filterOption.Q);
             model.DidYouMeans = results.DidYouMeans;
-            model.Query = commerceFilterOption.Q;
+            model.Query = filterOption.Q;
             model.IsMobile = _httpContextBase.GetOverriddenBrowser().IsMobileDevice;
 
             return model;
@@ -109,7 +111,12 @@ namespace Foundation.Features.Search
             }
 
             var viewModel = new CategoriesFilterViewModel();
-            foreach (var nodeContent in _contentLoader.GetChildren<NodeContent>(catalog.ContentLink))
+            var nodes = _findClient.Search<NodeContent>()
+                .Filter(x => x.ParentLink.ID.Match(catalog.ContentLink.ID))
+                .FilterForVisitor()
+                .GetContentResult();
+
+            foreach (var nodeContent in nodes)
             {
                 var nodeFilter = new CategoryFilter
                 {
@@ -120,43 +127,35 @@ namespace Foundation.Features.Search
                 };
                 viewModel.Categories.Add(nodeFilter);
 
-                var nodeChildren = _contentLoader.GetChildren<NodeContent>(nodeContent.ContentLink);
-                foreach (var nodeChild in nodeChildren)
-                {
-                    var nodeChildFilter = new CategoryFilter
-                    {
-                        DisplayName = nodeChild.DisplayName,
-                        Url = _urlResolver.GetUrl(nodeChild.ContentLink),
-                        IsActive = currentContent != null && currentContent.ContentLink == nodeChild.ContentLink,
-                        IsBestBet = ownStyleBestBets.Any(x => ((CommerceBestBetSelector)x.BestBetSelector).ContentLink.ID == nodeChild.ContentLink.ID)
-                    };
-
-                    nodeFilter.Children.Add(nodeChildFilter);
-                    if (nodeChildFilter.IsActive)
-                    {
-                        nodeFilter.IsActive = true;
-                    }
-
-                    var nodeChildrenOfNodeChild = _contentLoader.GetChildren<NodeContent>(nodeChild.ContentLink);
-                    foreach (var nodeChildOfChild in nodeChildrenOfNodeChild)
-                    {
-                        var nodeChildOfChildFilter = new CategoryFilter
-                        {
-                            DisplayName = nodeChildOfChild.DisplayName,
-                            Url = _urlResolver.GetUrl(nodeChildOfChild.ContentLink),
-                            IsActive = currentContent != null && currentContent.ContentLink == nodeChildOfChild.ContentLink,
-                            IsBestBet = ownStyleBestBets.Any(x => ((CommerceBestBetSelector)x.BestBetSelector).ContentLink.ID == nodeChildOfChild.ContentLink.ID)
-                        };
-
-                        nodeChildFilter.Children.Add(nodeChildOfChildFilter);
-                        if (nodeChildOfChildFilter.IsActive)
-                        {
-                            nodeFilter.IsActive = nodeChildFilter.IsActive = true;
-                        }
-                    }
-                }
+                GetChildrenNode(currentContent, nodeContent, nodeFilter, ownStyleBestBets);
             }
             return viewModel;
+        }
+
+        private void GetChildrenNode(IContent currentContent, NodeContent node, CategoryFilter nodeFilter, IEnumerable<BestBetBase> ownStyleBestBets)
+        {
+            var nodeChildrenOfNode = _findClient.Search<NodeContent>()
+                .Filter(x => x.ParentLink.ID.Match(node.ContentLink.ID))
+                .FilterForVisitor()
+                .GetContentResult();
+            foreach (var nodeChildOfChild in nodeChildrenOfNode)
+            {
+                var nodeChildOfChildFilter = new CategoryFilter
+                {
+                    DisplayName = nodeChildOfChild.DisplayName,
+                    Url = _urlResolver.GetUrl(nodeChildOfChild.ContentLink),
+                    IsActive = currentContent != null && currentContent.ContentLink == nodeChildOfChild.ContentLink,
+                    IsBestBet = ownStyleBestBets.Any(x => ((CommerceBestBetSelector)x.BestBetSelector).ContentLink.ID == nodeChildOfChild.ContentLink.ID)
+                };
+
+                nodeFilter.Children.Add(nodeChildOfChildFilter);
+                if (nodeChildOfChildFilter.IsActive)
+                {
+                    nodeFilter.IsActive = nodeFilter.IsActive = true;
+                }
+
+                GetChildrenNode(currentContent, nodeChildOfChild, nodeChildOfChildFilter, ownStyleBestBets);
+            }
         }
     }
 }

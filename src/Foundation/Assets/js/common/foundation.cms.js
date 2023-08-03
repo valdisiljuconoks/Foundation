@@ -4,9 +4,9 @@ import Header from "./header";
 import MobileNavigation from "./mobile-navigation";
 import Selection from "./selection";
 import Dropdown from "./dropdown";
-import SearchBox from "./search-box";
+import SearchBox from "../../../Features/Search/search-box";
+import { ContentSearch } from "../../../Features/Search/search";
 import Blog from "Features/Blog/blog";
-import { ContentSearch } from "./search";
 import Locations from "Features/Locations/locations";
 import CalendarBlock from "Features/Events/CalendarBlock/calendar-block";
 

@@ -1,7 +1,6 @@
 using EPiServer.Core;
 using EPiServer.DataAbstraction;
 using EPiServer.DataAnnotations;
-using EPiServer.Shell;
 using Foundation.Features.Shared;
 using Foundation.Infrastructure;
 using System.ComponentModel.DataAnnotations;
@@ -19,19 +18,9 @@ namespace Foundation.Features.Search.Search
         [Display(Name = "Top content area", Order = 210)]
         public virtual ContentArea TopContentArea { get; set; }
 
-        [CultureSpecific]
         [Display(Name = "Show recommendations", Description = "This will determine whether or not to show recommendations", Order = 220)]
         public virtual bool ShowRecommendations { get; set; }
 
         public override void SetDefaultValues(ContentType contentType) => ShowRecommendations = true;
-    }
-
-    [UIDescriptorRegistration]
-    public class SearchPageUIDescriptor : UIDescriptor<SearchResultPage>
-    {
-        public SearchPageUIDescriptor()
-            : base("epi-iconSearch epi-icon--primary")
-        {
-        }
     }
 }

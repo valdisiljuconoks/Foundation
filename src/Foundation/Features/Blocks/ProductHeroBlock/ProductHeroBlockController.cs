@@ -7,8 +7,8 @@ using EPiServer.Web.Routing;
 using Foundation.Commerce.Extensions;
 using System;
 using System.Linq;
+using System.Text;
 using System.Web.Mvc;
-
 
 namespace Foundation.Features.Blocks.ProductHeroBlock
 {
@@ -27,8 +27,7 @@ namespace Foundation.Features.Blocks.ProductHeroBlock
         public override ActionResult Index(ProductHeroBlock currentBlock)
         {
             var imageUrl = string.Empty;
-            var imagePosition = string.Empty;
-
+            var imagePosition = new StringBuilder();
 
             if (currentBlock.Image.Product != null)
             {
@@ -36,34 +35,32 @@ namespace Foundation.Features.Blocks.ProductHeroBlock
                 imageUrl = entryContentBase.GetAssets<IContentImage>(_contentLoader, _urlResolver).FirstOrDefault() ?? string.Empty;
             }
 
-            if (currentBlock.Image.ImagePosition.Equals("ImageLeft", StringComparison.OrdinalIgnoreCase))
+            if (currentBlock.Image.ImagePosition.Equals("ImageRight", StringComparison.OrdinalIgnoreCase))
             {
-                imagePosition = "justify-content: flex-start;";
+                imagePosition.Append("justify-content: flex-end;");
             }
             else if (currentBlock.Image.ImagePosition.Equals("ImageCenter", StringComparison.OrdinalIgnoreCase))
             {
-                imagePosition = "justify-content: center;";
+                imagePosition.Append("justify-content: center;");
             }
-            else if (currentBlock.Image.ImagePosition.Equals("ImageRight", StringComparison.OrdinalIgnoreCase))
+            else
             {
-                imagePosition = "justify-content: flex-end;";
+                imagePosition.Append("justify-content: flex-start;");
             }
-            else if (currentBlock.Image.ImagePosition.Equals("ImagePaddings", StringComparison.OrdinalIgnoreCase))
-            {
-                imagePosition = "padding: "
-                    + currentBlock.Image.PaddingTop + "px "
-                    + currentBlock.Image.PaddingRight + "px "
-                    + currentBlock.Image.PaddingBottom + "px "
-                    + currentBlock.Image.PaddingLeft + "px;";
-            }
+
+            imagePosition.Append("padding: "
+                + currentBlock.Image.PaddingTop + "px "
+                + currentBlock.Image.PaddingRight + "px "
+                + currentBlock.Image.PaddingBottom + "px "
+                + currentBlock.Image.PaddingLeft + "px;");
 
             var model = new ProductHeroBlockViewModel(currentBlock)
             {
                 ImageUrl = imageUrl,
-                ImagePosition = imagePosition
+                ImagePosition = imagePosition.ToString()
             };
 
-            return PartialView("~/Features/Blocks/Views/ProductHeroBlock.cshtml", model);
+            return PartialView("~/Features/Blocks/ProductHeroBlock/ProductHeroBlock.cshtml", model);
         }
     }
 }

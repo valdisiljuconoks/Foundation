@@ -74,7 +74,7 @@ namespace Foundation.Features.Blocks.CommentsBlock
                 blockViewModel.Messages.Add(new MessageViewModel(ex.Message, ErrorMessage));
             }
 
-            return PartialView("~/Features/Blocks/Views/CommentsBlock.cshtml", blockViewModel);
+            return PartialView("~/Features/Blocks/CommentsBlock/CommentsBlock.cshtml", blockViewModel);
         }
 
         /// <summary>
@@ -89,7 +89,7 @@ namespace Foundation.Features.Blocks.CommentsBlock
         {
             var errors = ValidateCommentForm(formViewModel);
 
-            if (errors.Count() == 0)
+            if (errors.Count == 0)
             {
                 var addedComment = AddComment(formViewModel);
                 if (addedComment != null && formViewModel.SendActivity)

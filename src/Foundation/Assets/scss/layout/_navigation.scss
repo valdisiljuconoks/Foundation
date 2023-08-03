@@ -76,6 +76,7 @@
             padding-right: 15px;
             line-height: $navigation-height;
             cursor: pointer;
+            white-space: nowrap;
         }
     }
 }
@@ -190,6 +191,10 @@
             }
         }
     }
+}
+
+.mega-menu-wrapper {
+    width: 700px;
 }
 
 .mega-menu {

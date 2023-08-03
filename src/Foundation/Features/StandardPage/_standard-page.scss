@@ -11,6 +11,14 @@
         margin-bottom: -50px;
     }
 
+    &__background {
+        position: absolute;
+        left: 0;
+        top: 0;
+        height: 100%;
+        width: 100%;
+    }
+
     &__banner {
         object-fit: cover;
         width: 100%;
@@ -100,6 +108,10 @@
                 }
             }
         }
+    }
+
+    &__container .article__title h1 {
+        text-shadow: 2px 2px 5px black;
     }
 
     @media (min-width: 320px) and (max-width: 768px) {

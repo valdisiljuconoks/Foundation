@@ -15,15 +15,12 @@ using Foundation.Commerce.Customer;
 using Foundation.Commerce.Customer.Services;
 using Foundation.Features.Blocks.MenuItemBlock;
 using Foundation.Features.Checkout.Services;
-using Foundation.Features.Header.Market;
 using Foundation.Features.Home;
 using Foundation.Features.Login;
 using Foundation.Features.MyAccount.AddressBook;
 using Foundation.Features.MyAccount.Bookmarks;
 using Foundation.Features.Settings;
-using Mediachase.Commerce;
 using Mediachase.Commerce.Customers;
-using Mediachase.Commerce.Markets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,13 +30,9 @@ namespace Foundation.Features.Header
 {
     public class HeaderViewModelFactory : IHeaderViewModelFactory
     {
-        private const string FlagLocation = "/Assets/icons/flags/";
-
         private readonly LocalizationService _localizationService;
         private readonly CartViewModelFactory _cartViewModelFactory;
         private readonly IUrlResolver _urlResolver;
-        private readonly IMarketService _marketService;
-        private readonly ICurrentMarket _currentMarket;
         private readonly IBookmarksService _bookmarksService;
         private readonly ICartService _cartService;
         private readonly IContentCacheKeyCreator _contentCacheKeyCreator;
@@ -53,8 +46,6 @@ namespace Foundation.Features.Header
             ICustomerService customerService,
             CartViewModelFactory cartViewModelFactory,
             IUrlResolver urlResolver,
-            IMarketService marketService,
-            ICurrentMarket currentMarket,
             IBookmarksService bookmarksService,
             ICartService cartService,
             CustomerContext customerContext,
@@ -67,8 +58,6 @@ namespace Foundation.Features.Header
             _customerService = customerService;
             _cartViewModelFactory = cartViewModelFactory;
             _urlResolver = urlResolver;
-            _marketService = marketService;
-            _currentMarket = currentMarket;
             _bookmarksService = bookmarksService;
             _cartService = cartService;
             _contentCacheKeyCreator = contentCacheKeyCreator;
@@ -86,7 +75,6 @@ namespace Foundation.Features.Header
             var viewModel = CreateViewModel(content, home, contact, isBookmarked);
             AddCommerceComponents(contact, viewModel);
             AddAnonymousComponents(home, viewModel);
-            AddMarketViewModel(content, viewModel);
             AddMyAccountMenu(home, viewModel);
             viewModel.LargeHeaderMenu = layoutSettings?.LargeHeaderMenu ?? true;
             viewModel.ShowCommerceControls = layoutSettings?.ShowCommerceHeaderComponents ?? true;
@@ -193,7 +181,27 @@ namespace Foundation.Features.Header
             var homeLanguage = homePage.Language.DisplayName;
             var layoutSettings = _settingsService.GetSiteSettings<LayoutSettings>();
             var referenceSettings = _settingsService.GetSiteSettings<ReferencePageSettings>();
-            menuItems = layoutSettings?.MainMenu?.FilteredItems.Select(x =>
+            var filter = new FilterContentForVisitor();
+            menuItems = layoutSettings?.MainMenu?.FilteredItems.Where(x =>
+            {
+                var _menuItem = _contentLoader.Get<IContent>(x.ContentLink);
+                MenuItemBlock _menuItemBlock;
+                if (_menuItem is MenuItemBlock)
+                {
+                    _menuItemBlock = _menuItem as MenuItemBlock;
+                    if (_menuItemBlock.Link == null)
+                    {
+                        return true;
+                    }
+                    var linkedItem = UrlResolver.Current.Route(new UrlBuilder(_menuItemBlock.Link));
+                    if (linkedItem != null && filter.ShouldFilter(linkedItem))
+                    {
+                        return false;
+                    }
+                    return true;
+                }
+                return true;
+            }).Select(x =>
             {
                 var itemCached = CacheManager.Get(x.ContentLink.ID + homeLanguage + ":" + Constant.CacheKeys.MenuItems) as MenuItemViewModel;
                 if (itemCached != null && !PageEditing.PageIsInEditMode)
@@ -266,43 +274,6 @@ namespace Foundation.Features.Header
             };
         }
 
-        protected virtual void AddMarketViewModel(IContent currentContent, HeaderViewModel viewModel)
-        {
-            var currentMarket = _currentMarket.GetCurrentMarket();
-
-            if (CacheManager.Get(Constant.CacheKeys.MarketViewModel + "-" + currentMarket.MarketId.Value) is MarketViewModel marketsViewModel)
-            {
-                viewModel.Markets = marketsViewModel;
-            }
-            else
-            {
-                var markets = _marketService.GetAllMarkets().Where(x => x.IsEnabled).OrderBy(x => x.MarketName)
-                    .Select(x => new MarketItem
-                    {
-                        Selected = false,
-                        Text = x.MarketName,
-                        Value = x.MarketId.Value,
-                        FlagUrl = GetFlagUrl(x.MarketId)
-                    });
-                marketsViewModel = new MarketViewModel
-                {
-                    Markets = markets,
-                    MarketId = currentMarket.MarketId.Value,
-                    CurrentMarket = new MarketItem
-                    {
-                        Selected = false,
-                        Text = currentMarket.MarketName,
-                        Value = currentMarket.MarketId.Value,
-                        FlagUrl = GetFlagUrl(currentMarket.MarketId)
-                    },
-                    ContentLink = currentContent?.ContentLink ?? ContentReference.EmptyReference
-                };
-                viewModel.Markets = marketsViewModel;
-
-                CacheManager.Insert(Constant.CacheKeys.MarketViewModel + "-" + currentMarket.MarketId.Value, marketsViewModel, new CacheEvictionPolicy(TimeSpan.FromHours(1), CacheTimeoutType.Sliding));
-            }
-        }
-
         protected virtual void AddCommerceComponents(FoundationContact contact, HeaderViewModel viewModel)
         {
             if (_databaseMode.DatabaseMode == DatabaseMode.ReadOnly)
@@ -353,81 +324,6 @@ namespace Foundation.Features.Header
 
                 viewModel.RegisterAccountViewModel.Address.Name = _localizationService.GetString("/Shared/Address/DefaultAddressName", "Default Address");
             }
-        }
-
-        protected virtual string GetFlagUrl(MarketId marketId)
-        {
-            if (marketId == new MarketId("FR"))
-            {
-                return $"{FlagLocation}fr.svg";
-            }
-
-            if (marketId == new MarketId("AUS"))
-            {
-                return $"{FlagLocation}au.svg";
-            }
-
-            if (marketId == new MarketId("BRA"))
-            {
-                return $"{FlagLocation}br.svg";
-            }
-
-            if (marketId == new MarketId("CAN"))
-            {
-                return $"{FlagLocation}ca.svg";
-            }
-
-            if (marketId == new MarketId("CHL"))
-            {
-                return $"{FlagLocation}cl.svg";
-            }
-
-            if (marketId == new MarketId("DEFAULT"))
-            {
-                return $"{FlagLocation}us.svg";
-            }
-
-            if (marketId == new MarketId("DEU"))
-            {
-                return $"{FlagLocation}de.svg";
-            }
-
-            if (marketId == new MarketId("ESP"))
-            {
-                return $"{FlagLocation}es.svg";
-            }
-
-            if (marketId == new MarketId("JPN"))
-            {
-                return $"{FlagLocation}jp.svg";
-            }
-
-            if (marketId == new MarketId("NLD"))
-            {
-                return $"{FlagLocation}nl.svg";
-            }
-
-            if (marketId == new MarketId("NOR"))
-            {
-                return $"{FlagLocation}no.svg";
-            }
-
-            if (marketId == new MarketId("SAU"))
-            {
-                return $"{FlagLocation}sa.svg";
-            }
-
-            if (marketId == new MarketId("SWE"))
-            {
-                return $"{FlagLocation}se.svg";
-            }
-
-            if (marketId == new MarketId("UK"))
-            {
-                return $"{FlagLocation}gb.svg";
-            }
-
-            return marketId == new MarketId("US") ? $"{FlagLocation}us.svg" : "";
         }
 
         private List<DemoUserViewModel> GetDemoUsers(bool showCommerceUsers)

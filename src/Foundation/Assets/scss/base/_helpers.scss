@@ -9,6 +9,11 @@ body {
     overflow-x: hidden;
 }
 
+video {
+    width: 100%;
+    height: auto;
+}
+
 /* Override bootstrap container for 1200px and up */
 .container {
     @include media-breakpoint-up(xl) {
@@ -22,6 +27,10 @@ div.block {
     vertical-align: top;
     padding-left: 0;
     padding-right: 0;
+}
+
+.display-none {
+    display: none;
 }
 
 hr {
@@ -177,6 +186,15 @@ ul.none-style-type {
         padding-right: 15px;
         padding-left: 15px;
     }
+}
+
+.editMode .screen-width-block {
+    width: 98vw;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -49vw;
+    margin-right: -49vw;
 }
 
 .sticky-top {

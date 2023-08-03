@@ -1,18 +1,19 @@
 ﻿@using EPiServer.Web;
 @using EPiServer.Web.Routing
 @using Foundation.Features.Header
+@using Foundation.Features.Blocks.MenuItemBlock
 
 @model HeaderViewModel
 
 @Html.FullRefreshPropertiesMetaData(new[] { "MainMenu", "SiteLogo" })
 
 <!-- Navigation bar for Desktop -->
-<div class="d-none d-lg-block">
+<div class="display-none d-lg-block">
     <nav class="container @(Model.LargeHeaderMenu ? "large-header-menu" : "")">
         <div class="row no-gutters">
             <div class="navigation">
                 <div class="navigation__left" @Html.EditAttributes(x => x.LayoutSettings.MainMenu)>
-                    @Html.Partial("_Menu", Model.MenuItems)
+                    @Html.Partial("_Menu", Model.MenuItems ?? new List<MenuItemViewModel>())
                 </div>
                 <div class="navigation__logo @(Model.LayoutSettings.HeaderMenuStyle == "LeftLogo" ? "flex-start" : "flex-center")"
                      style="@(Model.LayoutSettings.HeaderMenuStyle == "LeftLogo" ? "order: -1; width: auto;" : "")">
@@ -95,7 +96,7 @@
                         <div class="searchbox" id="js-searchbox">
                             <i class="icon-left" data-feather="search"></i>
                             <input type="hidden" id="searchOption" value="@Model.SearchSettings.SearchOption" />
-                            <input placeholder="Search" id="js-searchbox-input" class="jsSearchText"
+                            <input placeholder="Search" class="js-searchbox-input jsSearchText"
                                    data-search="@Url.ContentUrl(Model.ReferencePageSettings.SearchPage)"
                                    data-result-container="#jsResultSearch" />
                             <input type="hidden" id="searchConfidence" value="1" />
@@ -105,9 +106,9 @@
                                 <i data-feather="x" id="js-searchbox-close"></i>
                             </div>
                         </div>
-                        <div class="searchbox-popover" id="jsResultSearch" style="display: none">
-                            <div style="position: relative; min-height: 80px;">
-                                <div class="loading-cart" style="display: none">
+                        <div class="searchbox-popover display-none" id="jsResultSearch">
+                            <div class="position-relative">
+                                <div class="loading-cart" hidden>
                                     <div class="loader"></div>
                                 </div>
                                 <div class="js-searchbox-content">

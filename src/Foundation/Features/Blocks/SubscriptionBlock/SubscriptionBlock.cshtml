@@ -3,7 +3,9 @@
     fill in view data.
 *@
 @using EPiServer.Web.Mvc.Html
-@model Foundation.Features.Blocks.SubscriptionBlock.SubscriptionBlockViewModel
+@using Foundation.Features.Blocks.SubscriptionBlock
+
+@model SubscriptionBlockViewModel
 
 <div style="background-color: @Model.CurrentBlock.BackgroundColor; opacity:@Model.CurrentBlock.BlockOpacity;" class="row no-gutters @(Model.CurrentBlock.Padding + " " + Model.CurrentBlock.Margin)">
     @if (Model.ShowSubscriptionForm)
@@ -21,7 +23,6 @@
                 <div style="color:@messageStyle">@message.Body</div>
             }
 
-
             @{
                 var actionName = Model.UserSubscribedToPage ? "Unsubscribe" : "Subscribe";
                 using (Html.BeginForm(actionName, null))
@@ -34,6 +35,5 @@
                 }
             }
         </div>
-
     }
 </div>

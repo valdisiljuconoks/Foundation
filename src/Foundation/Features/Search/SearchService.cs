@@ -66,6 +66,7 @@ namespace Foundation.Features.Search
         CategorySearchResults SearchByCategory(Pagination pagination);
         ITypeSearch<T> FilterByCategories<T>(ITypeSearch<T> query, IEnumerable<ContentReference> categories) where T : ICategorizableContent;
     }
+
     public class SearchService : ISearchService
     {
         private readonly ICurrentMarket _currentMarket;
@@ -79,8 +80,8 @@ namespace Foundation.Features.Search
         private readonly IContentRepository _contentRepository;
         private readonly IPriceService _priceService;
         private readonly IPromotionService _promotionService;
-        private readonly ICurrencyService _currencyservice;
         private readonly IContentLoader _contentLoader;
+        private readonly BestBetRepository _bestBetRepository;
         private static readonly Random _random = new Random();
 
         public SearchService(ICurrentMarket currentMarket,
@@ -93,8 +94,8 @@ namespace Foundation.Features.Search
             IContentRepository contentRepository,
             IPriceService priceService,
             IPromotionService promotionService,
-            ICurrencyService currencyservice,
-            IContentLoader contentLoader
+            IContentLoader contentLoader,
+            BestBetRepository bestBetRepository
             )
         {
             _currentMarket = currentMarket;
@@ -108,8 +109,8 @@ namespace Foundation.Features.Search
             _contentRepository = contentRepository;
             _priceService = priceService;
             _promotionService = promotionService;
-            _currencyservice = currencyservice;
             _contentLoader = contentLoader;
+            _bestBetRepository = bestBetRepository;
         }
 
         public ProductSearchResults Search(IContent currentContent,
@@ -172,7 +173,7 @@ namespace Foundation.Features.Search
         public IEnumerable<SkuSearchResultModel> SearchSkus(string query)
         {
             var market = _currentMarket.GetCurrentMarket();
-            var currency = _currencyservice.GetCurrentCurrency();
+            var currency = _currencyService.GetCurrentCurrency();
 
             var results = _findClient.Search<GenericProduct>()
                 .Filter(_ => _.VariationModels(), x => x.Code.PrefixCaseInsensitive(query))
@@ -183,7 +184,7 @@ namespace Foundation.Features.Search
                 .Select(_ => _.VariationModels())
                 .GetResult()
                 .SelectMany(x => x)
-                .ToList(); ;
+                .ToList();
 
             if (results != null && results.Any())
             {
@@ -214,7 +215,7 @@ namespace Foundation.Features.Search
             var result = query.GetContentResult();
             var searchProducts = CreateProductViewModels(result, currentContent, "").ToList();
             GetManaualInclusion(searchProducts, currentContent, market, currency);
-            pages = GetPages(currentContent, page, searchProducts.Count());
+            pages = GetPages(currentContent, page, searchProducts.Count);
             return searchProducts;
         }
 
@@ -228,7 +229,7 @@ namespace Foundation.Features.Search
             var result = query.GetContentResult();
             var searchProducts = CreateProductViewModels(result, currentContent, "").ToList();
             GetManaualInclusion(searchProducts, currentContent, market, currency);
-            pages = GetPages(currentContent, page, searchProducts.Count());
+            pages = GetPages(currentContent, page, searchProducts.Count);
             return searchProducts;
         }
 
@@ -371,7 +372,7 @@ namespace Foundation.Features.Search
                 RelatedPages = results
             };
             model.Pagination.TotalMatching = results.TotalMatching;
-            model.Pagination.TotalPage = model.Pagination.TotalMatching / pagination.PageSize + (model.Pagination.TotalMatching % pagination.PageSize > 0 ? 1 : 0);
+            model.Pagination.TotalPage = (model.Pagination.TotalMatching / pagination.PageSize) + (model.Pagination.TotalMatching % pagination.PageSize > 0 ? 1 : 0);
 
             return model;
         }
@@ -574,6 +575,8 @@ namespace Foundation.Features.Search
             }
 
             query = query.ApplyBestBets()
+                .PublishedInCurrentLanguage()
+                .FilterForVisitor()
                 .Skip((filterOptions.Page - 1) * pageSize)
                 .Take(pageSize)
                 .StaticallyCacheFor(TimeSpan.FromMinutes(1));
@@ -585,7 +588,7 @@ namespace Foundation.Features.Search
                 ProductViewModels = CreateProductViewModels(result, currentContent, filterOptions.Q),
                 FacetGroups = GetFacetResults(filterOptions.FacetGroups, facetQuery, selectedfacets),
                 TotalCount = result.TotalMatching,
-                DidYouMeans = string.IsNullOrEmpty(filterOptions.Q) ? null : _findClient.Statistics().GetDidYouMean(filterOptions.Q),
+                DidYouMeans = string.IsNullOrEmpty(filterOptions.Q) ? null : result.TotalMatching != 0 ? null : _findClient.Statistics().GetDidYouMean(filterOptions.Q),
                 Query = filterOptions.Q,
             };
         }
@@ -663,11 +666,11 @@ namespace Foundation.Features.Search
             return query;
         }
 
-        private ITypeSearch<EntryContentBase> OrderBy(ITypeSearch<EntryContentBase> query, FilterOptionViewModel CommerceFilterOptionViewModel)
+        private ITypeSearch<EntryContentBase> OrderBy(ITypeSearch<EntryContentBase> query, FilterOptionViewModel commerceFilterOptionViewModel)
         {
-            if (string.IsNullOrEmpty(CommerceFilterOptionViewModel.Sort) || CommerceFilterOptionViewModel.Sort.Equals("Position"))
+            if (string.IsNullOrEmpty(commerceFilterOptionViewModel.Sort) || commerceFilterOptionViewModel.Sort.Equals("Position"))
             {
-                if (CommerceFilterOptionViewModel.SortDirection.Equals("Asc"))
+                if (commerceFilterOptionViewModel.SortDirection.Equals("Asc"))
                 {
                     query = query.OrderBy(x => x.SortOrder());
                     return query;
@@ -676,9 +679,9 @@ namespace Foundation.Features.Search
                 return query;
             }
 
-            if (CommerceFilterOptionViewModel.Sort.Equals("Price"))
+            if (commerceFilterOptionViewModel.Sort.Equals("Price"))
             {
-                if (CommerceFilterOptionViewModel.SortDirection.Equals("Asc"))
+                if (commerceFilterOptionViewModel.SortDirection.Equals("Asc"))
                 {
                     query = query.OrderBy(x => x.DefaultPrice());
                     return query;
@@ -687,9 +690,9 @@ namespace Foundation.Features.Search
                 return query;
             }
 
-            if (CommerceFilterOptionViewModel.Sort.Equals("Name"))
+            if (commerceFilterOptionViewModel.Sort.Equals("Name"))
             {
-                if (CommerceFilterOptionViewModel.SortDirection.Equals("Asc"))
+                if (commerceFilterOptionViewModel.SortDirection.Equals("Asc"))
                 {
                     query = query.OrderBy(x => x.DisplayName);
                     return query;
@@ -906,10 +909,10 @@ namespace Foundation.Features.Search
         /// <summary>
         /// Sets Featured Product property and Best Bet Product property to ProductViewModels.
         /// </summary>
+        /// <param name="productViewModels">The ProductViewModels is added two properties: Featured Product and Best Bet.</param>
         /// <param name="searchResult">The search result (product list).</param>
         /// <param name="currentContent">The product category.</param>
         /// <param name="searchQuery">The search query string to filter Best Bet result.</param>
-        /// <param name="productViewModels">The ProductViewModels is added two properties: Featured Product and Best Bet.</param>
         private void ApplyBoostedProperties(ref List<ProductTileViewModel> productViewModels, IContentResult<EntryContentBase> searchResult, IContent currentContent, string searchQuery)
         {
             var node = currentContent as GenericNode;
@@ -920,7 +923,7 @@ namespace Foundation.Features.Search
                 UpdateListWithFeatured(ref productViewModels, node);
             }
 
-            var bestBetList = new BestBetRepository().List().Where(i => i.PhraseCriterion.Phrase.CompareTo(searchQuery) == 0);
+            var bestBetList = _bestBetRepository.List().Where(i => i.PhraseCriterion.Phrase.CompareTo(searchQuery) == 0);
             //Filter for product best bet only.
             var productBestBet = bestBetList.Where(i => i.BestBetSelector is CommerceBestBetSelector);
             var ownStyleBestBet = bestBetList.Where(i => i.BestBetSelector is CommerceBestBetSelector && i.HasOwnStyle);
